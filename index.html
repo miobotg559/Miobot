@@ -1,140 +1,237 @@
-import os
-import logging
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulatore Bot Trading Telegram</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #0e1621;
+            color: #ffffff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .chat-container {
+            width: 100%;
+            max-width: 450px;
+            background-color: #17212b;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+            overflow: hidden;
+            border: 1px solid #24303f;
+        }
+        .chat-header {
+            background-color: #24303f;
+            padding: 15px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 16px;
+            border-bottom: 1px solid #2f3e50;
+        }
+        .message-box {
+            padding: 15px;
+        }
+        .grafico-placeholder {
+            width: 100%;
+            height: 200px;
+            background: linear-gradient(45deg, #1f2d3d, #2a3c54);
+            border-radius: 8px 8px 0 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            border: 1px solid #2b394a;
+            border-bottom: none;
+        }
+        .grafico-linea {
+            font-size: 48px;
+            opacity: 0.2;
+            position: absolute;
+        }
+        .ticker {
+            font-size: 24px;
+            font-weight: bold;
+            z-index: 1;
+            color: #40a7e3;
+        }
+        .caption-box {
+            background-color: #182533;
+            padding: 15px;
+            border-radius: 0 0 8px 8px;
+            border: 1px solid #2b394a;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .tastiera-inline {
+            margin-top: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .btn {
+            background-color: #2b5278;
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            font-size: 13px;
+            text-transform: uppercase;
+        }
+        .btn:hover {
+            background-color: #366694;
+        }
+        .btn-danger {
+            background-color: #b43c3c;
+        }
+        .btn-danger:hover {
+            background-color: #cf4848;
+        }
+        .riga-doppia {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .badge {
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+        .badge-attivo { background-color: #2ea44f; }
+        .badge-disattivo { background-color: #cf4848; }
+    </style>
+</head>
+<body>
 
-# ==========================================
-# CONFIGURAZIONE LOGGING
-# ==========================================
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
-)
-logger = logging.getLogger(__name__)
-
-# ==========================================
-# IMPOSTAZIONI DEL BOT (Modificabili)
-# ==========================================
-USA_TRAILING_SL = True  
-DISTANZA_TRAILING = 200.0  
-
-posizione_attiva = {
-    "open": True,
-    "tipo": "LONG",
-    "entry_price": 25000.0,
-    "current_price": 25300.0,
-    "sl": 24800.0,
-    "tp": 26000.0
-}
-
-# ==========================================
-# LOGICA DI TRADING (TRAILING STOP LOSS)
-# ==========================================
-def applica_trailing_stop():
-    """Gestisce lo spostamento dinamico dello stop loss."""
-    if not USA_TRAILING_SL or not posizione_attiva["open"]:
-        return
-
-    if posizione_attiva["tipo"] == "LONG":
-        nuovo_sl = posizione_attiva["current_price"] - DISTANZA_TRAILING
-        if nuovo_sl > posizione_attiva["sl"]:
-            posizione_attiva["sl"] = nuovo_sl
-            logger.info(f"Trailing SL aggiornato a: {posizione_attiva['sl']}")
-
-    elif posizione_attiva["tipo"] == "SHORT":
-        nuovo_sl = posizione_attiva["current_price"] + DISTANZA_TRAILING
-        if nuovo_sl < posizione_attiva["sl"]:
-            posizione_attiva["sl"] = nuovo_sl
-            logger.info(f"Trailing SL aggiornato a: {posizione_attiva['sl']}")
-
-# ==========================================
-# INTERFACCIA GRAFICA (GRAFICO + TASTI)
-# ==========================================
-async def comando_trade(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Invia il grafico con i tasti di chiusura manuale."""
-    stato_trailing = "🟢 ATTIVO" if USA_TRAILING_SL else "🔴 DISATTIVATO"
+<div class="chat-container">
+    <div class="chat-header">🤖 Trading Bot Simulator</div>
     
-    testo_report = (
-        f"📊 *MONITORAGGIO TRADING VIVO*\n\n"
-        f"🔹 *Asset:* BTC/USDT\n"
-        f"🔹 *Posizione:* {posizione_attiva['tipo']}\n"
-        f"🔹 *Prezzo Ingresso:* {posizione_attiva['entry_price']}\n"
-        f"🔹 *Prezzo Corrente:* {posizione_attiva['current_price']}\n"
-        f"🔹 *Trailing SL:* {stato_trailing}\n\n"
-        f"🛑 *Stop Loss:* {posizione_attiva['sl']}\n"
-        f"🎯 *Take Profit:* {posizione_attiva['tp']}"
-    )
+    <div class="message-box">
+        <div class="grafico-placeholder">
+            <div class="grafico-linea">📈📈</div>
+            <div id="display-prezzo" class="ticker">25,300.00 USD</div>
+            <span style="font-size: 11px; color: #8ab4f8; z-index: 1;">Grafico Real-time (Simulazione)</span>
+        </div>
 
-    tastiera = [
-        [InlineKeyboardButton("❌ CHIUDI POSIZIONE (MARKET)", callback_data="chiudi_totale")],
-        [
-            InlineKeyboardButton("⚠️ Chiudi 50%", callback_data="chiudi_50"),
-            InlineKeyboardButton("🔄 Aggiorna Prezzo", callback_data="aggiorna_tutto")
-        ]
-    ]
-    reply_markup = InlineKeyboardMarkup(tastiera)
-    url_grafico = "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=600&auto=format&fit=crop"
+        <div class="caption-box" id="testo-report">
+            📊 <b>MONITORAGGIO TRADING VIVO</b><br><br>
+            🔹 <b>Asset:</b> BTC/USDT<br>
+            🔹 <b>Posizione:</b> LONG<br>
+            🔹 <b>Prezzo Ingresso:</b> 25000.0<br>
+            🔹 <b>Prezzo Corrente:</b> <span id="rep-corrente">25300.0</span><br>
+            🔹 <b>Trailing SL:</b> <span id="rep-trailing" class="badge badge-attivo">🟢 ATTIVO</span><br><br>
+            🛑 <b>Stop Loss:</b> <span id="rep-sl">24800.0</span><br>
+            🎯 <b>Take Profit:</b> 26000.0
+        </div>
 
-    await context.bot.send_photo(
-        chat_id=update.effective_chat.id,
-        photo=url_grafico,
-        caption=testo_report,
-        reply_markup=reply_markup,
-        parse_mode="Markdown"
-    )
+        <div class="tastiera-inline" id="blocco-comandi">
+            <button class="btn btn-danger" onclick="chiudiTotale()">❌ Chiudi Posizione (Market)</button>
+            <div class="riga-doppia">
+                <button class="btn" onclick="chiudiMetà()">⚠️ Chiudi 50%</button>
+                <button class="btn" onclick="aggiornaPrezzo()">🔄 Simula Mercato</button>
+            </div>
+            <button class="btn" style="background-color: #24303f; border: 1px solid #3b4e66;" onclick="switchTrailing()">⚙️ Switch Trailing SL</button>
+        </div>
+    </div>
+</div>
 
-# ==========================================
-# GESTIONE INTERAZIONI UTENTE (CALLBACK)
-# ==========================================
-async def gestisci_interazioni(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Gestisce i click sui pulsanti vicino al grafico."""
-    query = update.callback_query
-    await query.answer()
+<script>
+    // STATO DEL BOT SIMULATO
+    let usaTrailingSl = true;
+    let distanzaTrailing = 200.0;
+    let posizioneOpen = true;
 
-    if not posizione_attiva["open"]:
-        await query.edit_message_caption(caption="🚫 *Nessuna posizione attiva da gestire.*", parse_mode="Markdown")
-        return
+    let posizione = {
+        tipo: "LONG",
+        entryPrice: 25000.0,
+        currentPrice: 25300.0,
+        sl: 24800.0,
+        tp: 26000.0
+    };
 
-    if query.data == "chiudi_totale":
-        posizione_attiva["open"] = False
-        await query.edit_message_caption(caption="❌ *Posizione chiusa manualmente a mercato.*", parse_mode="Markdown")
+    // Funzione per aggiornare l'interfaccia grafica del sito
+    function render() {
+        document.getElementById('display-prezzo').innerText = posizione.currentPrice.toFixed(2) + " USDT";
+        document.getElementById('rep-corrente').innerText = posizione.currentPrice.toFixed(1);
+        document.getElementById('rep-sl').innerText = posizione.sl.toFixed(1);
         
-    elif query.data == "chiudi_50":
-        await query.edit_message_caption(
-            caption=f"⚠️ *Chiuso il 50% della posizione.*\nPrezzo di uscita: {posizione_attiva['current_price']}", 
-            parse_mode="Markdown"
-        )
-        
-    elif query.data == "aggiorna_tutto":
-        posizione_attiva["current_price"] += 150.0
-        applica_trailing_stop()
-        
-        stato_trailing = "🟢 ATTIVO" if USA_TRAILING_SL else "🔴 DISATTIVATO"
-        nuovo_testo = (
-            f"📊 *MONITORAGGIO TRADING VIVO (AGGIORNATO)*\n\n"
-            f"🔹 *Posizione:* {posizione_attiva['tipo']}\n"
-            f"🔹 *Prezzo Corrente:* {posizione_attiva['current_price']} 📈\n"
-            f"🔹 *Trailing SL:* {stato_trailing}\n\n"
-            f"🛑 *Stop Loss:* {posizione_attiva['sl']}\n"
-            f"🎯 *Take Profit:* {posizione_attiva['tp']}"
-        )
-        await query.edit_message_caption(caption=nuovo_testo, reply_markup=query.message.reply_markup, parse_mode="Markdown")
+        const tBadge = document.getElementById('rep-trailing');
+        if(usaTrailingSl) {
+            tBadge.innerText = "🟢 ATTIVO";
+            tBadge.className = "badge badge-attivo";
+        } else {
+            tBadge.innerText = "🔴 DISATTIVATO";
+            tBadge.className = "badge badge-disattivo";
+        }
+    }
 
-# ==========================================
-# AVVIO APPLICAZIONE
-# ==========================================
-def main():
-    TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-    
-    if not TOKEN:
-        logger.error("Variabile d'ambiente TELEGRAM_BOT_TOKEN mancante!")
-        return
+    // Azione: Simula oscillazione dei prezzi di mercato
+    function aggiornaPrezzo() {
+        if (!posizioneOpen) return;
 
-    app = Application.builder().token(TOKEN).build()
-    app.add_handler(CommandHandler("trade", comando_trade))
-    app.add_handler(CallbackQueryHandler(gestisci_interazioni))
+        // Simula una variazione casuale del prezzo (trend principalmente positivo per testare il trailing)
+        let variazione = (Math.random() * 160) - 40; 
+        posizione.currentPrice += variazione;
 
-    logger.info("Bot avviato...")
-    app.run_polling()
+        // Logica Trailing Stop Loss
+        if (usaTrailingSl) {
+            let nuovoSl = posizione.currentPrice - distanzaTrailing;
+            if (nuovoSl > posizione.sl) {
+                posizione.sl = nuovoSl;
+            }
+        }
 
-if __name__ == "__main__":
-    main()
+        // Verifica condizioni di uscita automatiche
+        if (posizione.currentPrice <= posizione.sl) {
+            posizioneOpen = false;
+            document.getElementById('testo-report').innerHTML = "🛑 <b>Prezzo ha colpito lo Stop Loss. Posizione Chiusa Automaticamente.</b>";
+            rimuoviComandi();
+        } else if (posizione.currentPrice >= posizione.tp) {
+            posizioneOpen = false;
+            document.getElementById('testo-report').innerHTML = "🎯 <b>Prezzo ha colpito il Take Profit! Operazione conclusa in profitto.</b>";
+            rimuoviComandi();
+        } else {
+            render();
+        }
+    }
+
+    // Azione: Chiudi Intera Posizione
+    function chiudiTotale() {
+        posizioneOpen = false;
+        document.getElementById('testo-report').innerHTML = "❌ <b>Posizione chiusa manualmente a mercato con successo.</b>";
+        rimuoviComandi();
+    }
+
+    // Azione: Chiudi metà posizione
+    function chiudiMetà() {
+        if (!posizioneOpen) return;
+        document.getElementById('testo-report').innerHTML = `⚠️ <b>Chiuso il 50% della posizione.</b><br>Prezzo di uscita parziale: ${posizione.currentPrice.toFixed(1)} USDT.<br>Il resto della posizione rimane in corsa con Trailing SL.`;
+    }
+
+    // Azione: Attiva/Disattiva Trailing
+    function switchTrailing() {
+        if (!posizioneOpen) return;
+        usaTrailingSl = !usaTrailingSl;
+        render();
+    }
+
+    // Rimuove la tastiera quando l'operazione è chiusa
+    function rimuoviComandi() {
+        document.getElementById('blocco-comandi').style.display = 'none';
+        document.getElementById('display-prezzo').innerText = "POSIZIONE CHIUSA";
+    }
+
+    // Render iniziale
+    render();
+</script>
+
+</body>
+</html>
