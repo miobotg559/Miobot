@@ -1,17 +1,24 @@
+import os
 import logging
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
 
-# Configurazione Logging
-logging.basicConfig(level=logging.INFO)
+# ==========================================
+# CONFIGURAZIONE LOGGING
+# ==========================================
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+)
+logger = logging.getLogger(__name__)
 
 # ==========================================
-# CONFIGURAZIONE E VARIABILI DI STATO
+# IMPOSTAZIONI DEL BOT (Modificabili)
 # ==========================================
 # Imposta su True per attivare il Trailing SL, False per disattivarlo
 USA_TRAILING_SL = True  
+DISTANZA_TRAILING = 200.0  # Distanza fissa del trailing stop loss dal prezzo corrente
 
-# Stato fittizio della posizione (giusto per l'esempio)
+# Stato fittizio della posizione (Simulazione)
 posizione_attiva = {
     "open": True,
     "tipo": "LONG",
@@ -24,110 +31,129 @@ posizione_attiva = {
 # ==========================================
 # LOGICA DI TRADING (TRAILING STOP LOSS)
 # ==========================================
-def gestisci_trailing_stop():
-    """Gestisce il movimento dello stop loss se l'opzione è attiva."""
+def applica_trailing_stop():
+    """Gestisce lo spostamento dinamico dello stop loss se l'opzione è attiva."""
     if not USA_TRAILING_SL or not posizione_attiva["open"]:
         return
 
-    # Esempio matematico per un'operazione LONG:
-    # Se il prezzo sale, lo stop loss lo segue a una distanza fissa
-    distanza_sl = 200.0 # Distanza fissa dal prezzo corrente
-    
     if posizione_attiva["tipo"] == "LONG":
-        nuovo_sl = posizione_attiva["current_price"] - distanza_sl
-        # Lo stop loss sale solo, non scende mai
+        nuovo_sl = posizione_attiva["current_price"] - DISTANZA_TRAILING
+        # Nel LONG lo stop loss può solo salire
         if nuovo_sl > posizione_attiva["sl"]:
             posizione_attiva["sl"] = nuovo_sl
-            logging.info(f"Trailing SL aggiornato a: {posizione_attiva['sl']}")
+            logger.info(f"Trailing SL aggiornato automaticamente a: {posizione_attiva['sl']}")
+
+    elif posizione_attiva["tipo"] == "SHORT":
+        nuovo_sl = posizione_attiva["current_price"] + DISTANZA_TRAILING
+        # Nello SHORT lo stop loss può solo scendere
+        if nuovo_sl < posizione_attiva["sl"]:
+            posizione_attiva["sl"] = nuovo_sl
+            logger.info(f"Trailing SL aggiornato automaticamente a: {posizione_attiva['sl']}")
 
 # ==========================================
-# INTERFACCIA GRAFICA E PULSANTI
+# INTERFACCIA GRAFICA (GRAFICO + TASTI)
 # ==========================================
-async def mostra_grafico_e_comandi(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Invia il grafico con i tasti di chiusura immediata posizionati subito sotto."""
+async def comando_trade(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Invia il grafico finanziario con i tasti di chiusura manuale agganciati sotto."""
     
-    # Stato del Trailing SL da mostrare visivamente sul report
     stato_trailing = "🟢 ATTIVO" if USA_TRAILING_SL else "🔴 DISATTIVATO"
     
+    # Testo formattato in Markdown per il report di stato
     testo_report = (
-        f"📊 *Grafico e Stato Posizione*\n"
-        f"🔹 Tipo: {posizione_attiva['tipo']}\n"
-        f"🔹 Prezzo Ingresso: {posizione_attiva['entry_price']}\n"
-        f"🔹 Prezzo Corrente: {posizione_attiva['current_price']}\n"
-        f"🔹 Trailing SL: {stato_trailing}\n"
-        f"🛑 SL: {posizione_attiva['sl']} | 🎯 TP: {posizione_attiva['tp']}"
+        f"📊 *MONITORAGGIO TRADING VIVO*\n\n"
+        f"🔹 *Asset:* BTC/USDT\n"
+        f"🔹 *Posizione:* {posizione_attiva['tipo']}\n"
+        f"🔹 *Prezzo Ingresso:* {posizione_attiva['entry_price']}\n"
+        f"🔹 *Prezzo Corrente:* {posizione_attiva['current_price']}\n"
+        f"🔹 *Trailing SL:* {stato_trailing}\n\n"
+        f"🛑 *Stop Loss:* {posizione_attiva['sl']}\n"
+        f"🎯 *Take Profit:* {posizione_attiva['tp']}"
     )
 
-    # Tasti posizionati vicini al grafico per la chiusura manuale rapida
+    # Configurazione della tastiera sotto il grafico
     tastiera = [
         [
-            InlineKeyboardButton("❌ CHIUDI POSIZIONE", callback_data="chiudi_totale")
+            InlineKeyboardButton("❌ CHIUDI POSIZIONE (MARKET)", callback_data="chiudi_totale")
         ],
         [
             InlineKeyboardButton("⚠️ Chiudi 50%", callback_data="chiudi_50"),
-            InlineKeyboardButton("🔄 Aggiorna", callback_data="aggiorna_grafico")
+            InlineKeyboardButton("🔄 Aggiorna Prezzo", callback_data="aggiorna_tutto")
         ]
     ]
     reply_markup = InlineKeyboardMarkup(tastiera)
 
-    # Invia l'immagine del grafico con la tastiera agganciata sotto di essa
-    # Sostituisci 'url_o_path_grafico' con il file effettivo del tuo grafico
-    url_o_path_grafico = "https://via.placeholder.com/600x400.png?text=Grafico+Trading"
+    # Immagine segnaposto per il grafico (Sostituibile con un grafico reale generato ad es. da matplotlib)
+    url_grafico = "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=600&auto=format&fit=crop"
 
     await context.bot.send_photo(
         chat_id=update.effective_chat.id,
-        photo=url_o_path_grafico,
+        photo=url_grafico,
         caption=testo_report,
         reply_markup=reply_markup,
         parse_mode="Markdown"
     )
 
 # ==========================================
-# GESTIONE DELLE AZIONI (CALLBACK)
+# GESTIONE INTERAZIONI UTENTE (CALLBACK)
 # ==========================================
-async def gestisci_pulsanti(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Gestisce la chiusura manuale quando l'utente clicca sui tasti sotto il grafico."""
+async def gestisci_interazioni(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gestisce i click sui pulsanti di chiusura e aggiornamento vicino al grafico."""
     query = update.callback_query
     await query.answer()
 
+    if not posizione_attiva["open"]:
+        await query.edit_message_caption(caption="🚫 *Nessuna posizione attiva da gestire.*", parse_mode="Markdown")
+        return
+
     if query.data == "chiudi_totale":
         posizione_attiva["open"] = False
-        await query.edit_message_caption(caption="❌ **Posizione chiusa manualmente con successo.**")
+        await query.edit_message_caption(caption="❌ *Posizione chiusa manualmente a mercato.*", parse_mode="Markdown")
         
     elif query.data == "chiudi_50":
-        await query.edit_message_caption(caption="⚠️ **Chiuso il 50% della posizione. Restante in corsa.**")
+        await query.edit_message_caption(
+            caption=f"⚠️ *Chiuso il 50% della posizione.*\nPrezzo di uscita: {posizione_attiva['current_price']}", 
+            parse_mode="Markdown"
+        )
         
-    elif query.data == "aggiorna_grafico":
-        # Simula un cambio prezzo e aggiorna il trailing se attivo
-        posizione_attiva["current_price"] += 100
-        gestisci_trailing_stop()
+    elif query.data == "aggiorna_tutto":
+        # Simula una fluttuazione di mercato positiva quando l'utente aggiorna
+        posizione_attiva["current_price"] += 150.0
         
-        # Rigenera la schermata aggiornata
+        # Esegue il controllo e l'eventuale spostamento del trailing
+        applica_trailing_stop()
+        
         stato_trailing = "🟢 ATTIVO" if USA_TRAILING_SL else "🔴 DISATTIVATO"
         nuovo_testo = (
-            f"📊 *Grafico Aggiornato*\n"
-            f"🔹 Prezzo Corrente: {posizione_attiva['current_price']}\n"
-            f"🔹 Trailing SL: {stato_trailing}\n"
-            f"🛑 SL: {posizione_attiva['sl']} | 🎯 TP: {posizione_attiva['tp']}"
+            f"📊 *MONITORAGGIO TRADING VIVO (AGGIORNATO)*\n\n"
+            f"🔹 *Posizione:* {posizione_attiva['tipo']}\n"
+            f"🔹 *Prezzo Corrente:* {posizione_attiva['current_price']} 📈\n"
+            f"🔹 *Trailing SL:* {stato_trailing}\n\n"
+            f"🛑 *Stop Loss:* {posizione_attiva['sl']}\n"
+            f"🎯 *Take Profit:* {posizione_attiva['tp']}"
         )
         await query.edit_message_caption(caption=nuovo_testo, reply_markup=query.message.reply_markup, parse_mode="Markdown")
 
 # ==========================================
-# MAIN APPLICATION
+# AVVIO APPLICAZIONE
 # ==========================================
 def main():
-    # Inserisci qui il token del tuo bot Telegram
-    TOKEN = "IL_TUO_TELEGRAM_BOT_TOKEN"
+    # Recupera il Token dalle variabili d'ambiente (Pratica sicura per GitHub)
+    TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
     
+    if not TOKEN:
+        logger.error("Errore: La variabile d'ambiente TELEGRAM_BOT_TOKEN non è configurata!")
+        print("Uso locale: imposta la variabile d'ambiente o inserisci temporaneamente il token nel codice.")
+        return
+
+    # Inizializzazione dell'applicazione v20
     app = Application.builder().token(TOKEN).build()
 
-    # Comandi
-    app.add_handler(CommandHandler("trade", mostra_grafico_e_comandi))
-    
-    # Callback dei bottoni sotto il grafico
-    app.add_handler(CallbackQueryHandler(gestisci_pulsanti))
+    # Handlers
+    app.add_handler(CommandHandler("trade", comando_trade))
+    app.add_handler(CallbackQueryHandler(gestisci_interazioni))
 
-    print("Bot in esecuzione...")
+    # Avvio del Bot
+    logger.info("Bot avviato con successo. In attesa di comandi...")
     app.run_polling()
 
 if __name__ == "__main__":
