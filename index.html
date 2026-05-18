@@ -1,575 +1,134 @@
-<!DOCTYPE html>
-<html lang="it">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>UltimaBot Simulation</title>
-    <!-- Configurazione per App Mobile (Schermo Intero) -->
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#09090b">
+import logging
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
+
+# Configurazione Logging
+logging.basicConfig(level=logging.INFO)
+
+# ==========================================
+# CONFIGURAZIONE E VARIABILI DI STATO
+# ==========================================
+# Imposta su True per attivare il Trailing SL, False per disattivarlo
+USA_TRAILING_SL = True  
+
+# Stato fittizio della posizione (giusto per l'esempio)
+posizione_attiva = {
+    "open": True,
+    "tipo": "LONG",
+    "entry_price": 25000.0,
+    "current_price": 25300.0,
+    "sl": 24800.0,
+    "tp": 26000.0
+}
+
+# ==========================================
+# LOGICA DI TRADING (TRAILING STOP LOSS)
+# ==========================================
+def gestisci_trailing_stop():
+    """Gestisce il movimento dello stop loss se l'opzione è attiva."""
+    if not USA_TRAILING_SL or not posizione_attiva["open"]:
+        return
+
+    # Esempio matematico per un'operazione LONG:
+    # Se il prezzo sale, lo stop loss lo segue a una distanza fissa
+    distanza_sl = 200.0 # Distanza fissa dal prezzo corrente
     
-    <style>
-        :root {
-            --bg-main: #09090b;
-            --bg-card: #141416;
-            --bg-input: #1d1d21;
-            --border: #27272a;
-            --accent: #ffff00; /* Giallo Entry */
-            --green: #00ffaa;  /* Verde TP */
-            --red: #ff3b30;    /* Rosso SL */
-            --text: #f4f4f5;
-            --text-muted: #71717a;
-        }
+    if posizione_attiva["tipo"] == "LONG":
+        nuovo_sl = posizione_attiva["current_price"] - distanza_sl
+        # Lo stop loss sale solo, non scende mai
+        if nuovo_sl > posizione_attiva["sl"]:
+            posizione_attiva["sl"] = nuovo_sl
+            logging.info(f"Trailing SL aggiornato a: {posizione_attiva['sl']}")
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg-main);
-            color: var(--text);
-            margin: 0;
-            padding: env(safe-area-inset-top) 12px env(safe-area-inset-bottom) 12px;
-            user-select: none;
-            -webkit-tap-highlight-color: transparent;
-        }
-
-        .app-container {
-            max-width: 480px;
-            margin: 0 auto;
-            padding-bottom: 30px;
-        }
-
-        header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 15px 0 5px 0;
-            border-bottom: 1px solid var(--border);
-            margin-bottom: 15px;
-        }
-
-        header h1 {
-            font-size: 1.2rem;
-            margin: 0;
-            font-weight: 700;
-            letter-spacing: -0.5px;
-        }
-
-        .badge-broker {
-            background: rgba(0, 255, 170, 0.1);
-            color: var(--green);
-            padding: 4px 8px;
-            border-radius: 20px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-
-        .card {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 14px;
-            margin-bottom: 12px;
-        }
-
-        .card-title {
-            font-size: 0.85rem;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            font-weight: 700;
-            margin-bottom: 10px;
-            letter-spacing: 0.5px;
-        }
-
-        .metrics-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            text-align: center;
-        }
-
-        .metric-box {
-            background: var(--bg-input);
-            padding: 8px;
-            border-radius: 10px;
-            font-family: 'Courier New', Courier, monospace;
-        }
-
-        .metric-label {
-            font-size: 0.7rem;
-            color: var(--text-muted);
-            margin-bottom: 2px;
-        }
-
-        .metric-value {
-            font-size: 0.95rem;
-            font-weight: bold;
-        }
-
-        .grid-2x2 {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-        }
-
-        .form-group {
-            margin-bottom: 10px;
-        }
-
-        label {
-            display: block;
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            margin-bottom: 4px;
-        }
-
-        select, input {
-            width: 100%;
-            background: var(--bg-input);
-            border: 1px solid var(--border);
-            color: var(--text);
-            padding: 10px;
-            border-radius: 10px;
-            box-sizing: border-box;
-            font-size: 0.9rem;
-            outline: none;
-        }
-
-        select:focus, input:focus {
-            border-color: var(--text-muted);
-        }
-
-        /* Grafici */
-        .charts-wrapper {
-            position: relative;
-            background: #0d0d0f;
-            border-radius: 12px;
-            border: 1px solid var(--border);
-            overflow: hidden;
-            margin-bottom: 12px;
-        }
-
-        canvas {
-            display: block;
-            width: 100%;
-        }
-
-        #priceCanvas {
-            height: 160px;
-            border-bottom: 1px solid #1a1a1e;
-        }
-
-        #rsiCanvas {
-            height: 60px;
-        }
-
-        .chart-legend {
-            display: flex;
-            justify-content: space-around;
-            font-size: 0.7rem;
-            padding: 6px 0;
-            background: var(--bg-card);
-            border-bottom: 1px solid var(--border);
-        }
-
-        /* Bottoni */
-        .btn {
-            width: 100%;
-            padding: 14px;
-            border-radius: 12px;
-            border: none;
-            font-weight: 600;
-            font-size: 0.95rem;
-            cursor: pointer;
-            transition: all 0.1s ease;
-        }
-
-        .btn:active {
-            transform: scale(0.98);
-            opacity: 0.9;
-        }
-
-        .btn-bot-off { background: var(--green); color: #000; }
-        .btn-bot-on { background: #ff9500; color: #fff; }
-        .btn-panic { background: var(--red); color: #fff; margin-top: 8px; }
-        .btn-sub { background: var(--bg-input); color: var(--text); border: 1px solid var(--border); }
-
-        .profit { color: var(--green) !important; }
-        .loss { color: var(--red) !important; }
-    </style>
-</head>
-<body>
-
-<div class="app-container">
+# ==========================================
+# INTERFACCIA GRAFICA E PULSANTI
+# ==========================================
+async def mostra_grafico_e_comandi(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Invia il grafico con i tasti di chiusura immediata posizionati subito sotto."""
     
-    <header>
-        <h1>UltimaBot v1.0 Live</h1>
-        <div class="badge-broker">Ultima Markets Active</div>
-    </header>
-
-    <!-- Sezione Saldo e Monitor Live -->
-    <div class="card">
-        <div class="metrics-grid">
-            <div class="metric-box">
-                <div class="metric-label">Balance</div>
-                <div id="m-balance" class="metric-value">$1000.00</div>
-            </div>
-            <div class="metric-box">
-                <div class="metric-label">Equity</div>
-                <div id="m-equity" class="metric-value">$1000.00</div>
-            </div>
-            <div class="metric-box">
-                <div class="metric-label">Margine Libero</div>
-                <div id="m-margin" class="metric-value">$1000.00</div>
-            </div>
-        </div>
-        <div class="metrics-grid" style="margin-top: 8px; background: rgba(255,255,255,0.02); padding: 6px; border-radius: 8px;">
-            <div><span style="font-size:0.7rem; color:var(--text-muted)">Prezzo Ask:</span><br><b id="m-price" style="color:var(--accent); font-size:0.85rem;">0.00</b></div>
-            <div><span style="font-size:0.7rem; color:var(--text-muted)">Spread:</span><br><b style="color:var(--text-muted); font-size:0.85rem;" id="m-spread">20/21</b></div>
-            <div><span style="font-size:0.7rem; color:var(--text-muted)">RSI Live:</span><br><b id="m-rsi" style="color:#ffcc00; font-size:0.85rem;">50.0</b></div>
-        </div>
-    </div>
-
-    <!-- Pannello Grafici Unificati -->
-    <div class="chart-legend">
-        <div><span style="color: var(--accent);">●</span> Entry</div>
-        <div><span style="color: var(--green);">●</span> Take Profit (TP)</div>
-        <div><span style="color: var(--red);">●</span> Trailing Stop (SL)</div>
-    </div>
-    <div class="charts-wrapper">
-        <canvas id="priceCanvas"></canvas>
-        <canvas id="rsiCanvas"></canvas>
-    </div>
-
-    <!-- Configurazioni Algoritmo -->
-    <div class="card">
-        <div class="card-title">Setup Strategia & Rischio</div>
-        <div class="grid-2x2">
-            <div class="form-group">
-                <label>Asset</label>
-                <select id="cfg-asset" onchange="initAsset()">
-                    <option value="XAUUSD">Oro (XAUUSD)</option>
-                    <option value="GBPUSD">GBPUSD (Forex)</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>Strategia Professionale</label>
-                <select id="cfg-strategy">
-                    <option value="rsi_scalp">RSI Fast Pro Scalper</option>
-                    <option value="spike_follow">Spike Trailing Momentum</option>
-                </select>
-            </div>
-        </div>
-
-        <div class="grid-2x2" style="margin-top: 5px;">
-            <div class="form-group">
-                <label>Gestione Lotto</label>
-                <select id="cfg-lot-mode" onchange="toggleLotView()">
-                    <option value="manual">Lotti Manuali</option>
-                    <option value="auto">Lotti Auto (% Margine)</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label id="lbl-lot-context">Dimensione Lotto</label>
-                <input type="number" id="cfg-lot-val" value="0.10" step="0.01">
-            </div>
-        </div>
-
-        <div class="form-group" style="margin-top: 5px;">
-            <label>Deposito Iniziale Simulato ($)</label>
-            <input type="number" id="cfg-deposit" value="1000" onchange="resetAccount()">
-        </div>
-
-        <button id="btn-bot-toggle" class="btn btn-bot-off" onclick="toggleBot()">ATTIVA BOT AUTONOMO</button>
-    </div>
-
-    <!-- Chiusure di Sicurezza Manuali -->
-    <div class="card">
-        <div class="card-title">Intervento Rapido Operazioni</div>
-        <div class="grid-2x2">
-            <button class="btn btn-sub" onclick="manualPartialClose(0.33)">Chiudi TP1 (33%)</button>
-            <button class="btn btn-sub" onclick="manualPartialClose(0.50)">Chiudi TP2 (50%)</button>
-        </div>
-        <button class="btn btn-panic" onclick="panicCloseAll()">CHIUDI TUTTO IMMEDIATAMENTE</button>
-    </div>
-
-</div>
-
-<script>
-    // Configurazione e Stato
-    let balance = 1000, equity = 1000, freeMargin = 1000;
-    let currentPrice = 2000.00;
-    let spreadPips = 0.20; // 20 Pips per Oro
-    let botRunning = false;
-    let activeTrade = null;
+    # Stato del Trailing SL da mostrare visivamente sul report
+    stato_trailing = "🟢 ATTIVO" if USA_TRAILING_SL else "🔴 DISATTIVATO"
     
-    // Array per i grafici
-    let priceData = Array(50).fill(2000.00);
-    let rsiData = Array(50).fill(50);
-    let currentRsi = 50;
+    testo_report = (
+        f"📊 *Grafico e Stato Posizione*\n"
+        f"🔹 Tipo: {posizione_attiva['tipo']}\n"
+        f"🔹 Prezzo Ingresso: {posizione_attiva['entry_price']}\n"
+        f"🔹 Prezzo Corrente: {posizione_attiva['current_price']}\n"
+        f"🔹 Trailing SL: {stato_trailing}\n"
+        f"🛑 SL: {posizione_attiva['sl']} | 🎯 TP: {posizione_attiva['tp']}"
+    )
 
-    // Inizializzazione Canvas
-    const pCanvas = document.getElementById('priceCanvas');
-    const rCanvas = document.getElementById('rsiCanvas');
-    const pCtx = pCanvas.getContext('2d');
-    const rCtx = rCanvas.getContext('2d');
+    # Tasti posizionati vicini al grafico per la chiusura manuale rapida
+    tastiera = [
+        [
+            InlineKeyboardButton("❌ CHIUDI POSIZIONE", callback_data="chiudi_totale")
+        ],
+        [
+            InlineKeyboardButton("⚠️ Chiudi 50%", callback_data="chiudi_50"),
+            InlineKeyboardButton("🔄 Aggiorna", callback_data="aggiorna_grafico")
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(tastiera)
 
-    function setupCanvas() {
-        pCanvas.width = pCanvas.parentElement.clientWidth;
-        rCanvas.width = rCanvas.parentElement.clientWidth;
-        pCanvas.height = 160;
-        rCanvas.height = 60;
-    }
+    # Invia l'immagine del grafico con la tastiera agganciata sotto di essa
+    # Sostituisci 'url_o_path_grafico' con il file effettivo del tuo grafico
+    url_o_path_grafico = "https://via.placeholder.com/600x400.png?text=Grafico+Trading"
 
-    function initAsset() {
-        const asset = document.getElementById('cfg-asset').value;
-        if(asset === "XAUUSD") {
-            currentPrice = 2000.00;
-            spreadPips = 0.20; // Rappresenta lo spread di 20/21 su Oro
-            document.getElementById('m-spread').innerText = "20 / 21";
-        } else {
-            currentPrice = 1.2500;
-            spreadPips = 0.0012; // Spread di 12 pips su Forex
-            document.getElementById('m-spread').innerText = "12";
-        }
-        priceData = Array(50).fill(currentPrice);
-        panicCloseAll();
-    }
+    await context.bot.send_photo(
+        chat_id=update.effective_chat.id,
+        photo=url_o_path_grafico,
+        caption=testo_report,
+        reply_markup=reply_markup,
+        parse_mode="Markdown"
+    )
 
-    function resetAccount() {
-        balance = parseFloat(document.getElementById('cfg-deposit').value) || 1000;
-        equity = balance;
-        freeMargin = balance;
-        panicCloseAll();
-    }
+# ==========================================
+# GESTIONE DELLE AZIONI (CALLBACK)
+# ==========================================
+async def gestisci_pulsanti(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gestisce la chiusura manuale quando l'utente clicca sui tasti sotto il grafico."""
+    query = update.callback_query
+    await query.answer()
 
-    function toggleLotView() {
-        const mode = document.getElementById('cfg-lot-mode').value;
-        const label = document.getElementById('lbl-lot-context');
-        const input = document.getElementById('cfg-lot-val');
-        if(mode === 'auto') {
-            label.innerText = "% Margine Disponibile";
-            input.value = "5"; // Rischia il 5% del margine per operazione
-        } else {
-            label.innerText = "Dimensione Lotto";
-            input.value = "0.10";
-        }
-    }
-
-    function toggleBot() {
-        botRunning = !botRunning;
-        const btn = document.getElementById('btn-bot-toggle');
-        if(botRunning) {
-            btn.innerText = "SISTEMA AUTONOMO ATTIVO (STOP)";
-            btn.className = "btn btn-bot-on";
-        } else {
-            btn.innerText = "ATTIVA BOT AUTONOMO";
-            btn.className = "btn btn-bot-off";
-        }
-    }
-
-    // Motore Principale - Aggiornamento Tick (Sub-secondo per alta reattività)
-    function processTick() {
-        // Generazione movimento di prezzo (incluso spike casuale)
-        let volatility = currentPrice * 0.0004;
-        if(Math.random() > 0.96) volatility *= 5; // Genera spike istantaneo
-        let delta = (Math.random() - 0.5) * volatility;
-        currentPrice += delta;
+    if query.data == "chiudi_totale":
+        posizione_attiva["open"] = False
+        await query.edit_message_caption(caption="❌ **Posizione chiusa manualmente con successo.**")
         
-        priceData.push(currentPrice);
-        priceData.shift();
-
-        // Calcolo dell'RSI oscillante simulato per la strategia
-        currentRsi = 50 + Math.sin(Date.now() / 2500) * 28 + (Math.random() * 4 - 2);
-        currentRsi = Math.max(10, Math.min(90, currentRsi));
-        rsiData.push(currentRsi);
-        rsiData.shift();
-
-        // 1. Logica del Bot Autonomo
-        if(botRunning && !activeTrade) {
-            let size = parseFloat(document.getElementById('cfg-lot-val').value) || 0.1;
-            if(document.getElementById('cfg-lot-mode').value === 'auto') {
-                // Calcolo lotto automatico proporzionale al margine impostato
-                let pct = size / 100;
-                size = Math.max(0.01, Math.round((freeMargin * pct) / 10) / 100);
-            }
-
-            const strat = document.getElementById('cfg-strategy').value;
-            if(strat === 'rsi_scalp') {
-                if(currentRsi < 24) executeOrder('BUY', currentPrice + spreadPips, size);
-                if(currentRsi > 76) executeOrder('SELL', currentPrice - spreadPips, size);
-            } else if(strat === 'spike_follow') {
-                // Se rileva uno spike forte entra in scia
-                if(delta > currentPrice * 0.001) executeOrder('BUY', currentPrice + spreadPips, size);
-                if(delta < -(currentPrice * 0.001)) executeOrder('SELL', currentPrice - spreadPips, size);
-            }
-        }
-
-        // 2. Calcoli Gestione Posizione Attiva & Protezione Breakeven Zero Perdite
-        if(activeTrade) {
-            let multiplier = document.getElementById('cfg-asset').value === "XAUUSD" ? 100 : 10000;
-            
-            if(activeTrade.type === 'BUY') {
-                activeTrade.profit = (currentPrice - activeTrade.entry) * multiplier * activeTrade.lots;
-                
-                // Protezione Infallibile / Trailing Breakeven:
-                // Se il prezzo si muove a favore oltre lo spread, sposta subito lo stop loss a profitto minimo (0.01)
-                let gain = currentPrice - activeTrade.entry;
-                if(gain > spreadPips * 1.2) {
-                    let dynamicSL = currentPrice - (spreadPips * 1.1);
-                    // Sposta lo SL solo verso l'alto, mai verso il basso
-                    if(dynamicSL > activeTrade.sl && dynamicSL > activeTrade.entry) {
-                        activeTrade.sl = activeTrade.entry + 0.01; // Spostato a valore d'ingresso + $0.01 cent
-                    }
-                    // Trailing aggressivo avanzato se continua a salire
-                    if(gain > spreadPips * 3) {
-                        activeTrade.sl = currentPrice - (spreadPips * 1.5);
-                    }
-                }
-
-                // Esecuzione Uscite
-                if(currentPrice >= activeTrade.tp) finalizeTrade("TP");
-                else if(currentPrice <= activeTrade.sl) finalizeTrade("SL Protection");
-
-            } else { // Operazione SELL
-                activeTrade.profit = (activeTrade.entry - currentPrice) * multiplier * activeTrade.lots;
-                
-                let gain = activeTrade.entry - currentPrice;
-                if(gain > spreadPips * 1.2) {
-                    let dynamicSL = currentPrice + (spreadPips * 1.1);
-                    if(dynamicSL < activeTrade.sl && dynamicSL < activeTrade.entry) {
-                        activeTrade.sl = activeTrade.entry - 0.01; // Spostato a valore d'ingresso a protezione
-                    }
-                    if(gain > spreadPips * 3) {
-                        activeTrade.sl = currentPrice + (spreadPips * 1.5);
-                    }
-                }
-
-                if(currentPrice <= activeTrade.tp) finalizeTrade("TP");
-                else if(currentPrice >= activeTrade.sl) finalizeTrade("SL Protection");
-            }
-
-            equity = balance + activeTrade.profit;
-            freeMargin = equity - (activeTrade.lots * 80); // Margine trattenuto simulato
-        } else {
-            equity = balance;
-            freeMargin = balance;
-        }
-
-        renderInterface();
-        drawGraphics();
-    }
-
-    function executeOrder(type, price, lots) {
-        let tpDist = spreadPips * 6;
-        let slDist = spreadPips * 5;
-
-        activeTrade = {
-            type: type,
-            entry: price,
-            lots: lots,
-            profit: 0,
-            tp: type === 'BUY' ? price + tpDist : price - tpDist,
-            sl: type === 'BUY' ? price - slDist : price + slDist
-        };
-    }
-
-    function finalizeTrade(outcome) {
-        if(!activeTrade) return;
-        balance += activeTrade.profit;
-        activeTrade = null;
-    }
-
-    function panicCloseAll() {
-        if(activeTrade) finalizeTrade("Manual");
-    }
-
-    function manualPartialClose(pct) {
-        if(activeTrade) {
-            balance += activeTrade.profit * pct;
-            activeTrade.lots *= (1 - pct);
-            activeTrade.profit *= (1 - pct);
-        }
-    }
-
-    function renderInterface() {
-        document.getElementById('m-balance').innerText = "$" + balance.toFixed(2);
-        document.getElementById('m-equity').innerText = "$" + equity.toFixed(2);
-        document.getElementById('m-margin').innerText = "$" + Math.max(0, freeMargin).toFixed(2);
-        document.getElementById('m-price').innerText = currentPrice.toFixed(2);
-        document.getElementById('m-rsi').innerText = currentRsi.toFixed(1);
-
-        const eqBox = document.getElementById('m-equity');
-        if(equity > balance) eqBox.className = "metric-value profit";
-        else if(equity < balance) eqBox.className = "metric-value loss";
-        else eqBox.className = "metric-value";
-    }
-
-    // Motore Grafico Canvas (Prezzo + Sotto-Grafico RSI Live)
-    function drawGraphics() {
-        // 1. Grafico dei prezzi
-        pCtx.clearRect(0, 0, pCanvas.width, pCanvas.height);
-        let pMin = Math.min(...priceData);
-        let pMax = Math.max(...priceData);
+    elif query.data == "chiudi_50":
+        await query.edit_message_caption(caption="⚠️ **Chiuso il 50% della posizione. Restante in corsa.**")
         
-        if(activeTrade) {
-            pMin = Math.min(pMin, activeTrade.sl, activeTrade.tp, activeTrade.entry);
-            pMax = Math.max(pMax, activeTrade.sl, activeTrade.tp, activeTrade.entry);
-        }
-        let pPad = (pMax - pMin) * 0.1 || 0.2;
-        pMin -= pPad; pMax += pPad;
+    elif query.data == "aggiorna_grafico":
+        # Simula un cambio prezzo e aggiorna il trailing se attivo
+        posizione_attiva["current_price"] += 100
+        gestisci_trailing_stop()
+        
+        # Rigenera la schermata aggiornata
+        stato_trailing = "🟢 ATTIVO" if USA_TRAILING_SL else "🔴 DISATTIVATO"
+        nuovo_testo = (
+            f"📊 *Grafico Aggiornato*\n"
+            f"🔹 Prezzo Corrente: {posizione_attiva['current_price']}\n"
+            f"🔹 Trailing SL: {stato_trailing}\n"
+            f"🛑 SL: {posizione_attiva['sl']} | 🎯 TP: {posizione_attiva['tp']}"
+        )
+        await query.edit_message_caption(caption=nuovo_testo, reply_markup=query.message.reply_markup, parse_mode="Markdown")
 
-        function getX(i) { return (i / (priceData.length - 1)) * pCanvas.width; }
-        function getPriceY(v) { return pCanvas.height - ((v - pMin) / (pMax - pMin)) * pCanvas.height; }
+# ==========================================
+# MAIN APPLICATION
+# ==========================================
+def main():
+    # Inserisci qui il token del tuo bot Telegram
+    TOKEN = "IL_TUO_TELEGRAM_BOT_TOKEN"
+    
+    app = Application.builder().token(TOKEN).build()
 
-        // Linea andamento prezzo (Grigia/Azzurra)
-        pCtx.beginPath(); pCtx.strokeStyle = "#3f3f46"; pCtx.lineWidth = 2;
-        for(let i=0; i<priceData.length; i++) {
-            if(i===0) pCtx.moveTo(getX(i), getPriceY(priceData[i]));
-            else pCtx.lineTo(getX(i), getPriceY(priceData[i]));
-        }
-        pCtx.stroke();
+    # Comandi
+    app.add_handler(CommandHandler("trade", mostra_grafico_e_comandi))
+    
+    # Callback dei bottoni sotto il grafico
+    app.add_handler(CallbackQueryHandler(gestisci_pulsanti))
 
-        // Disegno livelli operativi attivi
-        if(activeTrade) {
-            // Linea Gialla di Ingresso
-            pCtx.beginPath(); pCtx.strokeStyle = "#ffff00"; pCtx.setLineDash([4, 4]);
-            pCtx.moveTo(0, getPriceY(activeTrade.entry)); pCtx.lineTo(pCanvas.width, getPriceY(activeTrade.entry)); pCtx.stroke();
+    print("Bot in esecuzione...")
+    app.run_polling()
 
-            // Linea Verde di Take Profit
-            pCtx.beginPath(); pCtx.strokeStyle = "#00ffaa"; pCtx.setLineDash([]);
-            pCtx.moveTo(0, getPriceY(activeTrade.tp)); pCtx.lineTo(pCanvas.width, getPriceY(activeTrade.tp)); pCtx.stroke();
-
-            // Linea Rossa di Stop Loss Dinamico
-            pCtx.beginPath(); pCtx.strokeStyle = "#ff3b30"; pCtx.lineWidth = 2;
-            pCtx.moveTo(0, getPriceY(activeTrade.sl)); pCtx.lineTo(pCanvas.width, getPriceY(activeTrade.sl)); pCtx.stroke();
-            pCtx.lineWidth = 1;
-        }
-
-        // 2. Sotto-Grafico dell'RSI Lineare
-        rCtx.clearRect(0, 0, rCanvas.width, rCanvas.height);
-        function getRsiY(v) { return rCanvas.height - ((v - 0) / (100 - 0)) * rCanvas.height; }
-
-        // Linee di soglia Ipercomprato/Ipervenduto (Tratteggiate sottili)
-        rCtx.beginPath(); rCtx.strokeStyle = "#27272a"; rCtx.setLineDash([3, 3]);
-        rCtx.moveTo(0, getRsiY(70)); rCtx.lineTo(rCanvas.width, getRsiY(70));
-        rCtx.moveTo(0, getRsiY(30)); rCtx.lineTo(rCanvas.width, getRsiY(30)); rCtx.stroke(); rCtx.setLineDash([]);
-
-        // Linea RSI (Viola/Giallo)
-        rCtx.beginPath(); rCtx.strokeStyle = "#a855f7"; rCtx.lineWidth = 1.5;
-        for(let i=0; i<rsiData.length; i++) {
-            if(i===0) rCtx.moveTo(getX(i), getRsiY(rsiData[i]));
-            else rCtx.lineTo(getX(i), getRsiY(rsiData[i]));
-        }
-        rCtx.stroke();
-    }
-
-    window.onload = () => {
-        setupCanvas();
-        initAsset();
-        setInterval(processTick, 250); // Loop continuo del simulatore tick per tick
-    };
-
-    window.onresize = setupCanvas;
-</script>
-</body>
-</html>
+if __name__ == "__main__":
+    main()
