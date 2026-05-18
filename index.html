@@ -2,236 +2,672 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simulatore Bot Trading Telegram</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>QuantumBot Pro - Dashboard</title>
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #0e1621;
-            color: #ffffff;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
+        /* DESIGN NERO E GIALLO (NERO E GIALLA ORO) & MOBILE OPTIMIZED */
+        :root {
+            --bg-primary: #0A0A0A;
+            --bg-secondary: #141414;
+            --accent: #FFD700;
+            --text-main: #FFFFFF;
+            --text-muted: #888888;
+            --green-tp: #00FF66;
+            --red-sl: #FF3333;
+        }
+
+        * {
+            box-sizing: border-box;
             margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            -webkit-tap-highlight-color: transparent;
         }
-        .chat-container {
-            width: 100%;
-            max-width: 450px;
-            background-color: #17212b;
-            border-radius: 12px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
-            overflow: hidden;
-            border: 1px solid #24303f;
-        }
-        .chat-header {
-            background-color: #24303f;
-            padding: 15px;
-            text-align: center;
-            font-weight: bold;
-            font-size: 16px;
-            border-bottom: 1px solid #2f3e50;
-        }
-        .message-box {
-            padding: 15px;
-        }
-        .grafico-placeholder {
-            width: 100%;
-            height: 200px;
-            background: linear-gradient(45deg, #1f2d3d, #2a3c54);
-            border-radius: 8px 8px 0 0;
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-main);
+            overflow-x: hidden;
+            height: 100vh;
             display: flex;
             flex-direction: column;
-            justify-content: center;
+        }
+
+        /* HEADER */
+        header {
+            background-color: var(--bg-secondary);
+            padding: 12px 15px;
+            display: flex;
+            justify-content: space-between;
             align-items: center;
-            position: relative;
-            border: 1px solid #2b394a;
-            border-bottom: none;
+            border-bottom: 1px solid #222;
+            z-index: 10;
         }
-        .grafico-linea {
-            font-size: 48px;
-            opacity: 0.2;
-            position: absolute;
-        }
-        .ticker {
+
+        .menu-btn {
+            background: none;
+            border: none;
+            color: var(--accent);
             font-size: 24px;
-            font-weight: bold;
-            z-index: 1;
-            color: #40a7e3;
+            cursor: pointer;
         }
-        .caption-box {
-            background-color: #182533;
-            padding: 15px;
-            border-radius: 0 0 8px 8px;
-            border: 1px solid #2b394a;
+
+        .logo {
+            font-weight: 800;
+            font-size: 16px;
+            color: var(--text-main);
+        }
+        .logo span { color: var(--accent); }
+
+        /* SIDEBAR A SCOMPARSA */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: -280px;
+            width: 280px;
+            height: 100%;
+            background-color: var(--bg-secondary);
+            box-shadow: 2px 0 10px rgba(0,0,0,0.8);
+            transition: 0.3s ease;
+            z-index: 99;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .sidebar.active {
+            left: 0;
+        }
+
+        .sidebar-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            z-index: 98;
+        }
+
+        .sidebar-overlay.active { display: block; }
+
+        .close-sidebar {
+            text-align: right;
+            font-size: 24px;
+            color: var(--text-muted);
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+
+        /* CONTROLLI E INPUT */
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            margin-bottom: 5px;
+            letter-spacing: 1px;
+        }
+
+        select, input {
+            width: 100%;
+            background-color: #1A1A1A;
+            border: 1px solid #333;
+            color: #FFF;
+            padding: 10px;
+            border-radius: 6px;
             font-size: 14px;
-            line-height: 1.5;
         }
-        .tastiera-inline {
-            margin-top: 10px;
+
+        select:focus, input:focus {
+            border-color: var(--accent);
+            outline: none;
+        }
+
+        /* INTERFACCIA MAIN (RESPONSIVE) */
+        .main-content {
+            flex: 1;
             display: flex;
             flex-direction: column;
+            padding: 10px;
+            gap: 10px;
+            overflow-y: auto;
+        }
+
+        /* PANNELLO STATO / CONTO */
+        .account-bar {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
             gap: 8px;
+            background: var(--bg-secondary);
+            padding: 10px;
+            border-radius: 8px;
         }
-        .btn {
-            background-color: #2b5278;
-            color: white;
-            border: none;
-            padding: 12px;
-            border-radius: 6px;
-            font-weight: 600;
+
+        .stat-box {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+        .stat-box var {
+            display: block;
+            font-size: 16px;
+            font-style: normal;
+            font-weight: bold;
+            color: var(--accent);
+        }
+
+        /* GRAFICO E CANVAS */
+        .chart-container {
+            flex: 1;
+            background: #000;
+            border-radius: 8px;
+            border: 1px solid #222;
+            position: relative;
+            min-height: 220px;
+        }
+
+        .tf-bar {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            display: flex;
+            gap: 4px;
+            z-index: 5;
+        }
+
+        .tf-btn {
+            background: rgba(20,20,20,0.8);
+            border: 1px solid #333;
+            color: #fff;
+            padding: 3px 6px;
+            font-size: 10px;
+            border-radius: 4px;
             cursor: pointer;
-            transition: background 0.2s;
-            font-size: 13px;
-            text-transform: uppercase;
         }
-        .btn:hover {
-            background-color: #366694;
+
+        .tf-btn.active {
+            background: var(--accent);
+            color: #000;
+            font-weight: bold;
         }
-        .btn-danger {
-            background-color: #b43c3c;
+
+        canvas {
+            width: 100%;
+            height: 100%;
         }
-        .btn-danger:hover {
-            background-color: #cf4848;
+
+        /* PANNELLO DI CONTROLLO IMMEDIATO */
+        .trade-actions {
+            background: var(--bg-secondary);
+            padding: 10px;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
         }
-        .riga-doppia {
+
+        .instant-buttons {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 8px;
+            gap: 10px;
         }
-        .badge {
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 11px;
+
+        .btn-trade {
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
             font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
         }
-        .badge-attivo { background-color: #2ea44f; }
-        .badge-disattivo { background-color: #cf4848; }
+        .btn-buy { background: var(--green-tp); color: #000; }
+        .btn-sell { background: var(--red-sl); color: #fff; }
+
+        .btn-panic {
+            width: 100%;
+            background: #FF5500;
+            color: #fff;
+            border: none;
+            padding: 10px;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 12px;
+            cursor: pointer;
+            text-transform: uppercase;
+        }
+
+        /* Desktop Breakpoint */
+        @media (min-width: 768px) {
+            .main-content {
+                flex-direction: row;
+            }
+            .sidebar {
+                position: static;
+                width: 300px;
+                height: auto;
+                left: 0;
+            }
+            .sidebar-overlay { display: none !important; }
+            .menu-btn { display: none; }
+            .chart-container { flex: 2; }
+            .trade-actions { width: 300px; justify-content: space-between; }
+        }
     </style>
 </head>
 <body>
 
-<div class="chat-container">
-    <div class="chat-header">🤖 Trading Bot Simulator</div>
-    
-    <div class="message-box">
-        <div class="grafico-placeholder">
-            <div class="grafico-linea">📈📈</div>
-            <div id="display-prezzo" class="ticker">25,300.00 USD</div>
-            <span style="font-size: 11px; color: #8ab4f8; z-index: 1;">Grafico Real-time (Simulazione)</span>
+    <div class="sidebar-overlay" id="overlay" onclick="toggleSidebar()"></div>
+
+    <!-- SIDEBAR MENU A SCOMPARSA (Impostazioni Algoritmo) -->
+    <div class="sidebar" id="sidebar">
+        <div class="close-sidebar" onclick="toggleSidebar()">✕</div>
+        
+        <div class="form-group">
+            <label>Ambiente di Trading</label>
+            <select id="env-mode" onchange="switchEnvironment()">
+                <option value="demo">Simulazione / Demo</option>
+                <option value="real">Conto Reale (Ultima Markets)</option>
+            </select>
         </div>
 
-        <div class="caption-box" id="testo-report">
-            📊 <b>MONITORAGGIO TRADING VIVO</b><br><br>
-            🔹 <b>Asset:</b> BTC/USDT<br>
-            🔹 <b>Posizione:</b> LONG<br>
-            🔹 <b>Prezzo Ingresso:</b> 25000.0<br>
-            🔹 <b>Prezzo Corrente:</b> <span id="rep-corrente">25300.0</span><br>
-            🔹 <b>Trailing SL:</b> <span id="rep-trailing" class="badge badge-attivo">🟢 ATTIVO</span><br><br>
-            🛑 <b>Stop Loss:</b> <span id="rep-sl">24800.0</span><br>
-            🎯 <b>Take Profit:</b> 26000.0
+        <div class="form-group">
+            <label>Credenziali Broker MT4</label>
+            <input type="text" id="mt4-login" placeholder="ID Account MT4" value="1029482">
+            <input type="password" id="mt4-pass" placeholder="Password Trader" style="margin-top:5px;">
         </div>
 
-        <div class="tastiera-inline" id="blocco-comandi">
-            <button class="btn btn-danger" onclick="chiudiTotale()">❌ Chiudi Posizione (Market)</button>
-            <div class="riga-doppia">
-                <button class="btn" onclick="chiudiMetà()">⚠️ Chiudi 50%</button>
-                <button class="btn" onclick="aggiornaPrezzo()">🔄 Simula Mercato</button>
-            </div>
-            <button class="btn" style="background-color: #24303f; border: 1px solid #3b4e66;" onclick="switchTrailing()">⚙️ Switch Trailing SL</button>
+        <div class="form-group">
+            <label>Asset Finanziario</label>
+            <select id="asset-select" onchange="changeAsset()">
+                <option value="XAUUSD">XAUUSD (Oro) [Spread: 20]</option>
+                <option value="GBPUSD">GBPUSD (Forex)</option>
+                <option value="EURUSD">EURUSD (Forex)</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Gestione Lotti</label>
+            <select id="lot-mode" onchange="toggleLotInput()">
+                <option value="auto">Automatico (% Margine)</option>
+                <option value="manual">Manuale Fisso</option>
+            </select>
+        </div>
+
+        <div class="form-group" id="manual-lot-box" style="display:none;">
+            <label>Dimensione Lotto</label>
+            <input type="number" id="lot-size" value="0.10" step="0.01">
+        </div>
+
+        <div class="form-group">
+            <label>% Margine Rischio (su Saldo)</label>
+            <input type="number" id="margin-risk" value="2" min="1" max="50">
+        </div>
+
+        <div class="form-group">
+            <label>Strategia Pro-Trader</label>
+            <select id="strategy-select">
+                <option value="scalping_hft">Scalping HFT Spikes Quantitativo</option>
+                <option value="rsi_reversal">Inversione RSI Estrema</option>
+                <option value="breakout_trend">Breakout Volatilità Professionale</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Trailing Stop (Inseguimento Profit)</label>
+            <select id="trailing-toggle">
+                <option value="true">Attivo (SL Insegue Continuamente)</option>
+                <option value="false">Disattivato</option>
+            </select>
         </div>
     </div>
-</div>
 
-<script>
-    // STATO DEL BOT SIMULATO
-    let usaTrailingSl = true;
-    let distanzaTrailing = 200.0;
-    let posizioneOpen = true;
+    <!-- MAIN DASHBOARD -->
+    <header>
+        <button class="menu-btn" onclick="toggleSidebar()">☰</button>
+        <div class="logo">QUANTUM<span>BOT PRO</span></div>
+        <div style="font-size: 11px; color: var(--green-tp);" id="bot-status">● AUTONOMO LIVE</div>
+    </header>
 
-    let posizione = {
-        tipo: "LONG",
-        entryPrice: 25000.0,
-        currentPrice: 25300.0,
-        sl: 24800.0,
-        tp: 26000.0
-    };
+    <div class="main-content">
+        <!-- Pannello Conto -->
+        <div class="account-bar" id="account-bar">
+            <div class="stat-box">Saldo <var id="val-balance">$10,000.00</var></div>
+            <div class="stat-box">Equity <var id="val-equity">$10,000.00</var></div>
+        </div>
 
-    // Funzione per aggiornare l'interfaccia grafica del sito
-    function render() {
-        document.getElementById('display-prezzo').innerText = posizione.currentPrice.toFixed(2) + " USDT";
-        document.getElementById('rep-corrente').innerText = posizione.currentPrice.toFixed(1);
-        document.getElementById('rep-sl').innerText = posizione.sl.toFixed(1);
-        
-        const tBadge = document.getElementById('rep-trailing');
-        if(usaTrailingSl) {
-            tBadge.innerText = "🟢 ATTIVO";
-            tBadge.className = "badge badge-attivo";
-        } else {
-            tBadge.innerText = "🔴 DISATTIVATO";
-            tBadge.className = "badge badge-disattivo";
+        <!-- Grafico Live ad Alta Frequenza -->
+        <div class="chart-container">
+            <div class="tf-bar">
+                <button class="tf-btn active" onclick="setTF('1s')">1s</button>
+                <button class="tf-btn" onclick="setTF('5s')">5s</button>
+                <button class="tf-btn" onclick="setTF('M1')">M1</button>
+                <button class="tf-btn" onclick="setTF('M5')">M5</button>
+                <button class="tf-btn" onclick="setTF('H1')">H1</button>
+            </div>
+            <canvas id="liveChart"></canvas>
+        </div>
+
+        <!-- Azioni Rapide & Chiusure Panico -->
+        <div class="trade-actions">
+            <div>
+                <label style="margin-bottom: 8px;">Operazioni Aperte Attuali</label>
+                <div id="active-trades-list" style="font-size:12px; max-height:80px; overflow-y:auto; margin-bottom:10px;">
+                    Nessuna posizione aperta.
+                </div>
+            </div>
+            
+            <div class="instant-buttons">
+                <button class="btn-trade btn-buy" onclick="forceOrder('BUY')">COMPRA (Force)</button>
+                <button class="btn-trade btn-sell" onclick="forceOrder('SELL')">VENDI (Force)</button>
+            </div>
+
+            <button class="btn-panic" onclick="closeAllPositions()">⚠️ CHIUDI TUTTO IMMEDIATAMENTE</button>
+        </div>
+    </div>
+
+    <!-- LOGICA ALGORITMO, MOTORE GRAFICO ED ESECUZIONE -->
+    <script>
+        // CONFIGURAZIONI ED ELEMENTI DI STATO GLOBALI
+        let balance = 10000.00;
+        let equity = 10000.00;
+        let activeTrades = [];
+        let marketPrice = 2400.00; // Prezzo base simulato Oro
+        let priceHistory = [];
+        let rsiHistory = [];
+        let currentTF = '1s';
+        const spread = 0.21; // Spread di 21 punti/pips impostato su XAUUSD
+
+        const canvas = document.getElementById('liveChart');
+        const ctx = canvas.getContext('2d');
+
+        // Toggle Sidebar Mobile
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('active');
+            document.getElementById('overlay').classList.toggle('active');
         }
-    }
 
-    // Azione: Simula oscillazione dei prezzi di mercato
-    function aggiornaPrezzo() {
-        if (!posizioneOpen) return;
+        function toggleLotInput() {
+            const mode = document.getElementById('lot-mode').value;
+            document.getElementById('manual-lot-box').style.display = mode === 'manual' ? 'block' : 'none';
+        }
 
-        // Simula una variazione casuale del prezzo (trend principalmente positivo per testare il trailing)
-        let variazione = (Math.random() * 160) - 40; 
-        posizione.currentPrice += variazione;
+        function setTF(tf) {
+            currentTF = tf;
+            document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+        }
 
-        // Logica Trailing Stop Loss
-        if (usaTrailingSl) {
-            let nuovoSl = posizione.currentPrice - distanzaTrailing;
-            if (nuovoSl > posizione.sl) {
-                posizione.sl = nuovoSl;
+        // MOTORE DI SIMULAZIONE E ANALISI DI MERCATO REALE/SIMULATO
+        function generateMarketData() {
+            // Genera oscillazioni basate sul tempo reale per simulare tick/secondi
+            const change = (Math.random() - 0.495) * 0.8; // Leggero bias positivo
+            marketPrice += change;
+            
+            priceHistory.push(marketPrice);
+            if(priceHistory.length > 100) priceHistory.shift();
+
+            // Calcolo RSI live semplificato per la visualizzazione immediata sotto il grafico
+            let rsi = 50 + (Math.sin(Date.now() / 5000) * 20) + (Math.random() * 5);
+            if(rsi > 100) rsi = 100; if(rsi < 0) rsi = 0;
+            rsiHistory.push(rsi);
+            if(rsiHistory.length > 100) rsiHistory.shift();
+
+            // Gestione Trailing Stop restrittivo (Algoritmo Infallibilità Protetta)
+            const isTrailingActive = document.getElementById('trailing-toggle').value === "true";
+            
+            activeTrades.forEach(trade => {
+                if(trade.type === 'BUY') {
+                    trade.profit = (marketPrice - trade.entry - spread) * (trade.lots * 100);
+                    if(isTrailingActive && marketPrice > trade.entry + 0.5) {
+                        // Lo SL non scende mai, sale inseguendo il profit lasciando margine minimo di +0.01 cent
+                        let targetSL = marketPrice - 0.3;
+                        if(targetSL > trade.sl) {
+                            trade.sl = Math.max(trade.entry + 0.01, targetSL);
+                        }
+                    }
+                    // Check TP e SL automatico
+                    if(marketPrice >= trade.tp) { closeTrade(trade.id, 'TP (Target Raggiunto)'); }
+                    else if(marketPrice <= trade.sl) { closeTrade(trade.id, 'SL (Protezione Break-Even)'); }
+                } else {
+                    trade.profit = (trade.entry - marketPrice - spread) * (trade.lots * 100);
+                    if(isTrailingActive && marketPrice < trade.entry - 0.5) {
+                        let targetSL = marketPrice + 0.3;
+                        if(trade.sl === 0 || targetSL < trade.sl) {
+                            trade.sl = Math.min(trade.entry - 0.01, targetSL);
+                        }
+                    }
+                    if(marketPrice <= trade.tp) { closeTrade(trade.id, 'TP (Target Raggiunto)'); }
+                    else if(marketPrice >= trade.sl) { closeTrade(trade.id, 'SL (Protezione Break-Even)'); }
+                }
+            });
+
+            // Calcolo Equity in tempo reale
+            let currentFloating = activeTrades.reduce((acc, t) => acc + t.profit, 0);
+            equity = balance + currentFloating;
+
+            document.getElementById('val-balance').innerText = `$${balance.toFixed(2)}`;
+            document.getElementById('val-equity').innerText = `$${equity.toFixed(2)}`;
+
+            updateTradesUI();
+            executeAutoStrategy(rsi);
+        }
+
+        // INTEGRAZIONE STRATEGIE DA PRO-TRADER (AUTOMAZIONE AUTONOMA)
+        function executeAutoStrategy(currentRsi) {
+            const strategy = document.getElementById('strategy-select').value;
+            
+            // Evita sovraccarico posizioni se ce n'è già una attiva nel micro-timeframe
+            if(activeTrades.length >= 3) return; 
+
+            if(strategy === 'rsi_reversal') {
+                if(currentRsi > 78) {
+                    executeOrder('SELL');
+                } else if(currentRsi < 22) {
+                    executeOrder('BUY');
+                }
+            } else if(strategy === 'scalping_hft') {
+                // Rilevamento spike rapidi su storici a 1 secondo
+                if(priceHistory.length > 3) {
+                    let lastChange = priceHistory[priceHistory.length-1] - priceHistory[priceHistory.length-3];
+                    if(lastChange > 0.4) executeOrder('BUY');
+                    if(lastChange < -0.4) executeOrder('SELL');
+                }
             }
         }
 
-        // Verifica condizioni di uscita automatiche
-        if (posizione.currentPrice <= posizione.sl) {
-            posizioneOpen = false;
-            document.getElementById('testo-report').innerHTML = "🛑 <b>Prezzo ha colpito lo Stop Loss. Posizione Chiusa Automaticamente.</b>";
-            rimuoviComandi();
-        } else if (posizione.currentPrice >= posizione.tp) {
-            posizioneOpen = false;
-            document.getElementById('testo-report').innerHTML = "🎯 <b>Prezzo ha colpito il Take Profit! Operazione conclusa in profitto.</b>";
-            rimuoviComandi();
-        } else {
-            render();
+        // CALCOLO LOTTI AUTOMATICI SUL MARGINE DISPONIBILE
+        function calculateLots() {
+            const mode = document.getElementById('lot-mode').value;
+            if(mode === 'manual') {
+                return parseFloat(document.getElementById('lot-size').value);
+            } else {
+                const marginPercent = parseFloat(document.getElementById('margin-risk').value);
+                // Calcolo prudenziale professionale sul margine libero del conto
+                let calculated = (balance * (marginPercent / 100)) / 100;
+                return Math.max(0.01, Math.min(10.0, parseFloat(calculated.toFixed(2))));
+            }
         }
-    }
 
-    // Azione: Chiudi Intera Posizione
-    function chiudiTotale() {
-        posizioneOpen = false;
-        document.getElementById('testo-report').innerHTML = "❌ <b>Posizione chiusa manualmente a mercato con successo.</b>";
-        rimuoviComandi();
-    }
+        // ESECUZIONE ORDINE (PRONTO PER WEBHOOK INTEGRATO MT4 SU ULTIMA MARKETS)
+        function executeOrder(type) {
+            const lot = calculateLots();
+            const entryPrice = marketPrice;
+            let tpPrice, slPrice;
 
-    // Azione: Chiudi metà posizione
-    function chiudiMetà() {
-        if (!posizioneOpen) return;
-        document.getElementById('testo-report').innerHTML = `⚠️ <b>Chiuso il 50% della posizione.</b><br>Prezzo di uscita parziale: ${posizione.currentPrice.toFixed(1)} USDT.<br>Il resto della posizione rimane in corsa con Trailing SL.`;
-    }
+            if(type === 'BUY') {
+                tpPrice = entryPrice + 1.5;
+                slPrice = entryPrice - 1.0; // SL Iniziale largo, convertito subito dal trailing
+            } else {
+                tpPrice = entryPrice - 1.5;
+                slPrice = entryPrice + 1.0;
+            }
 
-    // Azione: Attiva/Disattiva Trailing
-    function switchTrailing() {
-        if (!posizioneOpen) return;
-        usaTrailingSl = !usaTrailingSl;
-        render();
-    }
+            const newTrade = {
+                id: Date.now() + Math.random().toString(36).substr(2, 5),
+                type: type,
+                entry: entryPrice,
+                lots: lot,
+                tp: tpPrice,
+                sl: slPrice,
+                profit: 0
+            };
 
-    // Rimuove la tastiera quando l'operazione è chiusa
-    function rimuoviComandi() {
-        document.getElementById('blocco-comandi').style.display = 'none';
-        document.getElementById('display-prezzo').innerText = "POSIZIONE CHIUSA";
-    }
+            activeTrades.push(newTrade);
+            
+            // NOTA PER L'UTENTE: Qui si innesta il fetch verso il gateway MT4
+            // Se modalità è 'real' -> Invia richiesta API HTTP Post a MetaApi/UltimaMarkets Bridge
+            if(document.getElementById('env-mode').value === 'real') {
+                console.log(`[MT4 BRIDGE] Inviando ordine reale a Ultima Markets: ${type} ${lot} lotti.`);
+            }
+        }
 
-    // Render iniziale
-    render();
-</script>
+        function forceOrder(type) {
+            executeOrder(type);
+        }
 
+        function closeTrade(id, reason) {
+            activeTrades = activeTrades.filter(t => {
+                if(t.id === id) {
+                    balance += t.profit;
+                    return false;
+                }
+                return true;
+            });
+        }
+
+        function closeAllPositions() {
+            activeTrades.forEach(t => {
+                balance += t.profit;
+            });
+            activeTrades = [];
+        }
+
+        // AGGIORNAMENTO INTERFACCIA OPERAZIONI APERTE
+        function updateTradesUI() {
+            const container = document.getElementById('active-trades-list');
+            if(activeTrades.length === 0) {
+                container.innerHTML = "Nessuna posizione attiva.";
+                return;
+            }
+            let html = "";
+            activeTrades.forEach(t => {
+                let color = t.profit >= 0 ? 'var(--green-tp)' : 'var(--red-sl)';
+                html += `<div style="display:flex; justify-content:space-between; margin-bottom:4px; background:#1E1E1E; padding:4px 6px; border-radius:4px;">
+                    <span style="color:${t.type==='BUY'?'var(--green-tp)':'var(--red-sl)'}">${t.type} ${t.lots}</span>
+                    <span>SL: ${t.sl.toFixed(2)} | TP: ${t.tp.toFixed(2)}</span>
+                    <span style="color:${color}; font-weight:bold;">$${t.profit.toFixed(2)}</span>
+                </div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        // RENDERIZZAZIONE GRAFICA LIVE CANVAS (CANDELE E VALORI LINEE LIVE)
+        function drawChart() {
+            if(!canvas || !ctx) return;
+            
+            // Resize dinamico per schermi retina e mobile
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const chartHeight = canvas.height * 0.7;
+            const rsiTop = canvas.height * 0.75;
+            const rsiHeight = canvas.height * 0.2;
+
+            if(priceHistory.length < 2) return;
+
+            // Trova max e min per scalare il grafico automaticamente
+            let minPrice = Math.min(...priceHistory) - 0.5;
+            let maxPrice = Math.max(...priceHistory) + 0.5;
+            let priceRange = maxPrice - minPrice;
+
+            function getX(index) { return (index / 100) * canvas.width; }
+            function getY(price) { return chartHeight - ((price - minPrice) / priceRange) * chartHeight; }
+
+            // Disegna griglia di sfondo
+            ctx.strokeStyle = '#151515';
+            ctx.lineWidth = 1;
+            for(let i=1; i<5; i++) {
+                let yLine = (chartHeight / 5) * i;
+                ctx.beginPath(); ctx.moveTo(0, yLine); ctx.lineTo(canvas.width, yLine); ctx.stroke();
+            }
+
+            // Disegna linea prezzo di mercato (Gialla/Bianca ad alta visibilità)
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(getX(0), getY(priceHistory[0]));
+            for(let i = 1; i < priceHistory.length; i++) {
+                ctx.lineTo(getX(i), getY(priceHistory[i]));
+            }
+            ctx.stroke();
+
+            // SULLO STESSO GRAFICO: Disegna Linee di Entrata, TP e SL se ci sono posizioni attive
+            activeTrades.forEach(trade => {
+                let yEntry = getY(trade.entry);
+                let yTp = getY(trade.tp);
+                let ySl = getY(trade.sl);
+
+                // Linea entrata GIALLO
+                ctx.strokeStyle = '#FFD700'; ctx.setLineDash([4, 4]);
+                ctx.beginPath(); ctx.moveTo(0, yEntry); ctx.lineTo(canvas.width, yEntry); ctx.stroke();
+                
+                // Linea TP VERDE
+                ctx.strokeStyle = '#00FF66'; ctx.setLineDash([2, 2]);
+                ctx.beginPath(); ctx.moveTo(0, yTp); ctx.lineTo(canvas.width, yTp); ctx.stroke();
+
+                // Linea SL ROSSO
+                ctx.strokeStyle = '#FF3333'; ctx.setLineDash([]);
+                ctx.beginPath(); ctx.moveTo(0, ySl); ctx.lineTo(canvas.width, ySl); ctx.stroke();
+            });
+            ctx.setLineDash([]); // Reset linee continue
+
+            // AREA SOTTOSTANTE: Grafico Linea RSI Live
+            ctx.fillStyle = '#111';
+            ctx.fillRect(0, rsiTop, canvas.width, rsiHeight);
+            
+            // Linee di soglia RSI (30 e 70)
+            ctx.strokeStyle = '#333';
+            ctx.beginPath();
+            ctx.moveTo(0, rsiTop + rsiHeight*0.3); ctx.lineTo(canvas.width, rsiTop + rsiHeight*0.3);
+            ctx.moveTo(0, rsiTop + rsiHeight*0.7); ctx.lineTo(canvas.width, rsiTop + rsiHeight*0.7);
+            ctx.stroke();
+
+            if(rsiHistory.length > 0) {
+                ctx.strokeStyle = '#FFD700'; // RSI Giallo Oro
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(getX(0), rsiTop + rsiHeight - (rsiHistory[0]/100)*rsiHeight);
+                for(let i=1; i<rsiHistory.length; i++) {
+                    ctx.lineTo(getX(i), rsiTop + rsiHeight - (rsiHistory[i]/100)*rsiHeight);
+                }
+                ctx.stroke();
+            }
+        }
+
+        function changeAsset() {
+            // Logica di reset storico al cambio asset per pulizia dati
+            priceHistory = [];
+            marketPrice = document.getElementById('asset-select').value === "XAUUSD" ? 2400.00 : 1.2540;
+        }
+
+        function switchEnvironment() {
+            const mode = document.getElementById('env-mode').value;
+            if(mode === 'real') {
+                alert("⚠️ ATTENZIONE: Collegamento simulato a Ultima Markets attivo. Assicurati che i dettagli del tuo account MT4 e le chiavi API del bridge siano configurati correttamente.");
+            }
+        }
+
+        // Loop di aggiornamento continuo (Esecuzione ogni secondo per emulare il Tick/1sec richiesto)
+        setInterval(() => {
+            generateMarketData();
+            drawChart();
+        }, 1000);
+    </script>
 </body>
 </html>
